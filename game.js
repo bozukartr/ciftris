@@ -349,9 +349,14 @@ function createRoom() {
     // Listen for guest
     onValue(roomRef, (snapshot) => {
         const data = snapshot.val();
-        if (data && data.guest && data.status === 'waiting') {
+        // If guest exists and we haven't started yet (or status is ready to start)
+        if (data && data.guest && (data.status === 'waiting' || data.status === 'ready')) {
             // Guest joined
-            startGame(data.guest);
+            // Check if we are already playing to avoid double start? 
+            // startGame updates status to 'playing', so the next snapshot will be 'playing'.
+            if (data.status !== 'playing') {
+                startGame(data.guest);
+            }
         }
     });
 
