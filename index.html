@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Çiftris - Co-op Tetris</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div id="app">
+        <!-- HUD Layer -->
+        <header class="hud-top">
+            <div class="hud-item">
+                <span class="label">Score</span>
+                <span id="score" class="value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="label">Level</span>
+                <span id="level" class="value">1</span>
+            </div>
+            <div class="hud-item">
+                <span class="label">Next</span>
+                <canvas id="nextCanvas" width="40" height="40"></canvas>
+            </div>
+        </header>
+
+        <!-- Game Container -->
+        <main class="game-container">
+            <canvas id="gameCanvas"></canvas>
+        </main>
+
+        <!-- Controls Layer -->
+        <footer class="controls-bottom">
+            <div class="control-group">
+                <button id="btn-left" class="control-btn" data-action="left">◀</button>
+                <button id="btn-right" class="control-btn" data-action="right">▶</button>
+            </div>
+
+            <div class="control-group">
+                <button id="btn-softdrop" class="control-btn secondary" data-action="down">▼</button>
+                <button id="btn-drop" class="control-btn secondary" data-action="drop">⤓</button>
+            </div>
+
+            <div class="control-group">
+                <button id="btn-rotate" class="control-btn primary" data-action="rotate">⟳</button>
+            </div>
+        </footer>
+
+        <!-- Pause Button moved to float or handled differently? Let's put it top right or integrate -->
+        <!-- Just adding a floating pause for now or inside HUD? 
+             User asked for "Ortada: ▼ / ⤓ + Pause". 
+             Let's put Pause in center group in footer, small.
+        -->
+        <div style="position: absolute; top: 20px; right: 20px; z-index: 20;">
+            <button id="btn-pause" class="control-btn secondary" style="width: 40px; height: 40px;"
+                data-action="pause">||</button>
+        </div>
+
+        <!-- Modals -->
+        <div id="modal-overlay" class="modal-overlay">
+
+            <!-- Connection Modal -->
+            <div id="modal-connect" class="modal visible">
+                <h1>Çiftris</h1>
+                <p>Minimal Co-op Tetris</p>
+
+                <div class="input-group">
+                    <button id="btn-create-room" class="btn-main">Create Room</button>
+                    <p>- OR -</p>
+                    <input type="text" id="inp-room-code" placeholder="CODE" maxlength="4">
+                    <button id="btn-join-room" class="btn-ghost">Join Room</button>
+                </div>
+            </div>
+
+            <!-- Waiting Modal -->
+            <div id="modal-waiting" class="modal hidden">
+                <h1>Waiting</h1>
+                <p>Share this code with your friend:</p>
+                <div id="display-room-code" class="room-code">----</div>
+                <div class="loader"></div> <!-- CSS Loader needs to be added or removed if using text -->
+                <button class="btn-ghost" onclick="location.reload()">Cancel</button>
+            </div>
+
+            <!-- Game Over / Pause Modal -->
+            <div id="modal-game-menu" class="modal hidden">
+                <h1 id="menu-title">Paused</h1>
+                <p id="menu-score" class="value">0</p>
+                <div class="input-group">
+                    <button id="btn-resume" class="btn-main">Resume</button>
+                    <button id="btn-restart" class="btn-ghost">Restart</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden">Level Up!</div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Firebase SDKs (using UMD for simple HTML inclusion without bundler if preferred, or Modules) -->
+    <!-- We will use type="module" in game.js which imports from CDN -->
+    <script type="module" src="game.js"></script>
+</body>
+
+</html>
