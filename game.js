@@ -472,9 +472,9 @@ function startGame(guestId) {
         }
     });
 
-    // Hide Waiting
-    document.getElementById('modal-waiting').classList.remove('visible');
-    document.getElementById('modal-waiting').classList.add('hidden'); // Ensure hidden
+    // Hide Modals & Overlay
+    document.getElementById('modal-waiting').classList.add('hidden');
+    document.getElementById('modal-overlay').classList.remove('visible');
 
     setupGameListeners();
 
@@ -522,6 +522,8 @@ function setupGameListeners() {
             if (snap.val() === 'playing') {
                 gameActive = true;
                 document.getElementById('modal-waiting').classList.add('hidden');
+                document.getElementById('modal-connect').classList.add('hidden'); // Safety
+                document.getElementById('modal-overlay').classList.remove('visible');
             }
         });
 
@@ -748,9 +750,11 @@ function togglePause() {
     isPaused = !isPaused;
     if (isPaused) {
         showMenu("PAUSED");
+        document.getElementById('modal-overlay').classList.add('visible');
     } else {
         document.getElementById('modal-game-menu').classList.remove('visible');
         document.getElementById('modal-game-menu').classList.add('hidden');
+        document.getElementById('modal-overlay').classList.remove('visible');
     }
 }
 
