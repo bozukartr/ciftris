@@ -769,7 +769,7 @@ function showMenu(title) {
     document.getElementById('menu-score').innerText = score;
     document.getElementById('modal-game-menu').classList.remove('hidden');
     document.getElementById('modal-game-menu').classList.add('visible');
-});
+}
 
 document.getElementById('btn-restart').addEventListener('click', () => {
     location.reload();
