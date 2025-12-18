@@ -579,10 +579,11 @@ function setupUI() {
     // Touch/Click
     document.querySelectorAll('.control-btn').forEach(btn => {
         btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault(); // Prevent scroll/zoom if possible
             const action = btn.dataset.action;
             if (actions[action]) actions[action]();
-        });
+        }, { passive: false }); // Mark as non-passive to allow preventing default
+
         btn.addEventListener('mousedown', (e) => {
             const action = btn.dataset.action;
             if (actions[action]) actions[action]();

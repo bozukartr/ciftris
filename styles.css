@@ -131,6 +131,8 @@ body {
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+    touch-action: none;
+    /* Prevent browser gestures */
 }
 
 .control-btn:active,
