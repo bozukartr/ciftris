@@ -517,13 +517,22 @@ function setupGameListeners() {
 
     // Optimized State Listeners for Guest
     if (!isHost) {
-        // Listen for Game Start
+        // Listen for Game Start / Pause / Resume
         onValue(ref(db, `rooms/${roomId}/status`), (snap) => {
-            if (snap.val() === 'playing') {
+            const val = snap.val();
+            if (val === 'playing') {
                 gameActive = true;
+                isPaused = false;
+                // Hide Menus
                 document.getElementById('modal-waiting').classList.add('hidden');
-                document.getElementById('modal-connect').classList.add('hidden'); // Safety
+                document.getElementById('modal-connect').classList.add('hidden');
+                document.getElementById('modal-game-menu').classList.remove('visible');
+                document.getElementById('modal-game-menu').classList.add('hidden');
                 document.getElementById('modal-overlay').classList.remove('visible');
+            } else if (val === 'paused') {
+                isPaused = true;
+                showMenu("PAUSED");
+                document.getElementById('modal-overlay').classList.add('visible');
             }
         });
 
@@ -580,15 +589,16 @@ function processInput(inputData) {
     // Host Logic
     if (action === 'move') { move(val); pieceMoved = true; }
     if (action === 'rotate') { rotate(val); pieceMoved = true; }
-    if (action === 'drop') { playerDrop(); pieceMoved = true; } // playerDrop handles its own sync if locked?
+    if (action === 'drop') { playerDrop(); pieceMoved = true; }
     if (action === 'harddrop') {
         while (!collide(grid, { ...piece, y: piece.y + 1 })) {
             piece.y++;
         }
-        playerDrop(); // will trigger syncGrid inside playerDrop if locked
-        // But playerDrop logic needs to know? 
-        // playerDrop calls syncState() currently. We need to update playerDrop too.
+        playerDrop();
         pieceMoved = true;
+    }
+    if (action === 'toggle_pause') {
+        togglePause(); // Host calls own toggle
     }
 
     // Explicit sync if we just moved/rotated without locking
@@ -747,14 +757,41 @@ function rotateMatrix(matrix, dir) {
 }
 
 function togglePause() {
-    isPaused = !isPaused;
-    if (isPaused) {
-        showMenu("PAUSED");
-        document.getElementById('modal-overlay').classList.add('visible');
+    if (isOffline) {
+        // Local offline toggle
+        isPaused = !isPaused;
+        if (isPaused) {
+            showMenu("PAUSED");
+            document.getElementById('modal-overlay').classList.add('visible');
+        } else {
+            document.getElementById('modal-game-menu').classList.remove('visible');
+            document.getElementById('modal-game-menu').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('visible');
+        }
+        return;
+    }
+
+    if (isHost) {
+        // Host Toggles and Syncs
+        isPaused = !isPaused;
+        const newStatus = isPaused ? 'paused' : 'playing';
+        updateDB(ref(db, `rooms/${roomId}`), { status: newStatus });
+
+        // Host UI Update (Listener doesn't fire for local write immediately usually? safe to do manual)
+        if (isPaused) {
+            showMenu("PAUSED");
+            document.getElementById('modal-overlay').classList.add('visible');
+        } else {
+            document.getElementById('modal-game-menu').classList.remove('visible');
+            document.getElementById('modal-game-menu').classList.add('hidden');
+            document.getElementById('modal-overlay').classList.remove('visible');
+        }
     } else {
-        document.getElementById('modal-game-menu').classList.remove('visible');
-        document.getElementById('modal-game-menu').classList.add('hidden');
-        document.getElementById('modal-overlay').classList.remove('visible');
+        // Guest Requests Toggle
+        push(ref(db, `rooms/${roomId}/inputs`), {
+            action: 'toggle_pause',
+            src: playerId
+        });
     }
 }
 
