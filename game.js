@@ -219,7 +219,9 @@ function gameLoop(time = 0) {
         dropCounter += deltaTime;
         if (dropCounter > dropInterval) {
             playerDrop();
-            syncState(); // Sync after drop
+            // Gravity drop only needs piece sync usually, unless it locks
+            // playerDrop handles locking logic
+            if (piece) syncPiece();
         }
     }
 
@@ -236,7 +238,8 @@ function playerDrop() {
         merge(grid, piece);
         resetPiece();
         arenaSweep();
-        syncState(); // Major state change
+        syncGrid(); // Major state change (Grid + Score + New Piece?)
+        syncPiece(); // New piece position
     }
     dropCounter = 0;
 }
@@ -490,81 +493,90 @@ function setupGameListeners() {
             // Show Role Toast
             showToast(`Role: ${role}`);
 
-            // Enable/Disable buttons based on role
             updateControls(role);
         }
     });
 
     // Connectivity Listeners
     if (isHost) {
-        // Host watches guest
         onValue(ref(db, `rooms/${roomId}/guest`), (snap) => {
             if (!snap.exists() && gameActive) {
-                // Guest left
                 showToast("Player B Disconnected");
                 isPaused = true;
                 showMenu("Player B Disconnected");
             }
         });
     } else {
-        // Guest watches Host (if room disappears)
         onValue(ref(db, `rooms/${roomId}`), (snap) => {
             if (!snap.exists()) {
-                // Host left
                 alert("Host Disconnected");
                 location.reload();
             }
         });
     }
 
-    // Listen for Game State (Guest only mostly, but Host listens too involved?)
-    // Actually Host runs local, syncs to DB. Guest listens DB.
+    // Optimized State Listeners for Guest
     if (!isHost) {
-        onValue(ref(db, `rooms/${roomId}/state`), (snap) => {
-            const state = snap.val();
-            if (state) {
-                grid = state.grid || grid;
-                piece = state.piece || piece;
-                score = state.score || 0;
-                // Sync Score UI
-                document.getElementById('score').innerText = score;
-                // Re-draw
-                draw();
-            }
+        // High frequency: Piece updates
+        onValue(ref(db, `rooms/${roomId}/state/piece`), (snap) => {
+            const p = snap.val();
+            if (p) piece = p;
         });
 
-        // Start Loop just for rendering interpolation if needed? 
-        // For now Guest just renders on change.
+        // Low frequency: Grid/Score updates
+        onValue(ref(db, `rooms/${roomId}/state/grid`), (snap) => {
+            const g = snap.val();
+            if (g) grid = g;
+        });
+
+        onValue(ref(db, `rooms/${roomId}/state/score`), (snap) => {
+            const s = snap.val();
+            if (s !== null) {
+                score = s;
+                document.getElementById('score').innerText = score;
+            }
+        });
     }
 }
 
-function syncState() {
+function syncPiece() {
+    if (!isHost || !gameActive) return;
+    updateDB(ref(db, `rooms/${roomId}/state`), { piece: piece });
+}
+
+function syncGrid() {
     if (!isHost || !gameActive) return;
     updateDB(ref(db, `rooms/${roomId}/state`), {
         grid: grid,
-        piece: piece,
         score: score
     });
-
-    // Throttling might be needed for 'piece' if too frequent, but let's try raw.
 }
 
 function processInput(inputData) {
     if (!gameActive) return;
     const { action, val } = inputData;
 
+    let pieceMoved = false;
+    let gridChanged = false;
+
     // Host Logic
-    if (action === 'move') move(val);
-    if (action === 'rotate') rotate(val);
-    if (action === 'drop') playerDrop();
+    if (action === 'move') { move(val); pieceMoved = true; }
+    if (action === 'rotate') { rotate(val); pieceMoved = true; }
+    if (action === 'drop') { playerDrop(); pieceMoved = true; } // playerDrop handles its own sync if locked?
     if (action === 'harddrop') {
         while (!collide(grid, { ...piece, y: piece.y + 1 })) {
             piece.y++;
         }
-        playerDrop();
+        playerDrop(); // will trigger syncGrid inside playerDrop if locked
+        // But playerDrop logic needs to know? 
+        // playerDrop calls syncState() currently. We need to update playerDrop too.
+        pieceMoved = true;
     }
 
-    syncState();
+    // Explicit sync if we just moved/rotated without locking
+    // (playerDrop handles locking sync)
+    // Actually relying on the generic sync is safer but let's optimize calls.
+    if (pieceMoved) syncPiece();
 }
 
 // UI Setup
@@ -620,16 +632,16 @@ function handleInput(type, val) {
 
     if (isHost || role === 'BOTH') {
         // Apply directly
-        if (type === 'move') move(val);
-        if (type === 'rotate') rotate(val);
-        if (type === 'drop') playerDrop(); // soft
+        if (type === 'move') { move(val); syncPiece(); }
+        if (type === 'rotate') { rotate(val); syncPiece(); }
+        if (type === 'drop') { playerDrop(); syncPiece(); } // soft drop
         if (type === 'harddrop') {
             while (!collide(grid, { ...piece, y: piece.y + 1 })) {
                 piece.y++;
             }
             playerDrop();
+            // playerDrop calls syncGrid if locked
         }
-        syncState();
     } else {
         // Send to Host
         push(ref(db, `rooms/${roomId}/inputs`), {
