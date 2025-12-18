@@ -206,8 +206,8 @@ function draw() {
 }
 
 function gameLoop(time = 0) {
-    if (!gameActive || isPaused) {
-        animationId = requestAnimationFrame(gameLoop);
+    if (!gameActive) {
+        // If not active, maybe draw once?
         return;
     }
 
@@ -597,9 +597,6 @@ function processInput(inputData) {
         playerDrop();
         pieceMoved = true;
     }
-    if (action === 'toggle_pause') {
-        togglePause(); // Host calls own toggle
-    }
 
     // Explicit sync if we just moved/rotated without locking
     // (playerDrop handles locking sync)
@@ -756,67 +753,22 @@ function rotateMatrix(matrix, dir) {
     else matrix.reverse();
 }
 
-function togglePause() {
-    if (isOffline) {
-        // Local offline toggle
-        isPaused = !isPaused;
-        if (isPaused) {
-            showMenu("PAUSED");
-            document.getElementById('modal-overlay').classList.add('visible');
-        } else {
-            document.getElementById('modal-game-menu').classList.remove('visible');
-            document.getElementById('modal-game-menu').classList.add('hidden');
-            document.getElementById('modal-overlay').classList.remove('visible');
-        }
-        return;
-    }
-
-    if (isHost) {
-        // Host Toggles and Syncs
-        isPaused = !isPaused;
-        const newStatus = isPaused ? 'paused' : 'playing';
-        updateDB(ref(db, `rooms/${roomId}`), { status: newStatus });
-
-        // Host UI Update (Listener doesn't fire for local write immediately usually? safe to do manual)
-        if (isPaused) {
-            showMenu("PAUSED");
-            document.getElementById('modal-overlay').classList.add('visible');
-        } else {
-            document.getElementById('modal-game-menu').classList.remove('visible');
-            document.getElementById('modal-game-menu').classList.add('hidden');
-            document.getElementById('modal-overlay').classList.remove('visible');
-        }
-    } else {
-        // Guest Requests Toggle
-        push(ref(db, `rooms/${roomId}/inputs`), {
-            action: 'toggle_pause',
-            src: playerId
-        });
-    }
-}
-
 function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.innerText = msg;
-    t.classList.remove('hidden');
-    t.classList.add('show');
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.remove('hidden');
+    toast.classList.add('show');
     setTimeout(() => {
-        t.classList.remove('show');
-        t.classList.add('hidden');
+        toast.classList.remove('show');
+        toast.classList.add('hidden');
     }, 2000);
 }
 
 function showMenu(title) {
-    document.getElementById('menu-title').innerText = title || "Paused";
-    document.getElementById('menu-score').innerText = `Score: ${score}`;
+    document.getElementById('menu-title').innerText = title || "Game Over";
+    document.getElementById('menu-score').innerText = score;
     document.getElementById('modal-game-menu').classList.remove('hidden');
     document.getElementById('modal-game-menu').classList.add('visible');
-}
-
-document.getElementById('btn-resume').addEventListener('click', () => {
-    isPaused = false;
-    document.getElementById('modal-game-menu').classList.remove('visible');
-    document.getElementById('modal-game-menu').classList.add('hidden');
 });
 
 document.getElementById('btn-restart').addEventListener('click', () => {
