@@ -517,16 +517,32 @@ function setupGameListeners() {
 
     // Optimized State Listeners for Guest
     if (!isHost) {
+        // Listen for Game Start
+        onValue(ref(db, `rooms/${roomId}/status`), (snap) => {
+            if (snap.val() === 'playing') {
+                gameActive = true;
+                document.getElementById('modal-waiting').classList.add('hidden');
+            }
+        });
+
         // High frequency: Piece updates
         onValue(ref(db, `rooms/${roomId}/state/piece`), (snap) => {
             const p = snap.val();
-            if (p) piece = p;
+            // If p is null/undefined, keep existing or clear? 
+            // Usually Host sends valid piece.
+            if (p) {
+                piece = p;
+                draw();
+            }
         });
 
         // Low frequency: Grid/Score updates
         onValue(ref(db, `rooms/${roomId}/state/grid`), (snap) => {
             const g = snap.val();
-            if (g) grid = g;
+            if (g) {
+                grid = g;
+                draw();
+            }
         });
 
         onValue(ref(db, `rooms/${roomId}/state/score`), (snap) => {
