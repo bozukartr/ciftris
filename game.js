@@ -659,6 +659,16 @@ function handleInput(type, val) {
             // playerDrop calls syncGrid if locked
         }
     } else {
+        // CLIENT-SIDE PREDICTION
+        // Apply immediately locally to hide latency
+        if (role === 'BOTH' ||
+            (role === 'MOVE' && (type === 'move')) ||
+            (role === 'ROTATE' && (type === 'rotate'))) {
+
+            if (type === 'move') { move(val); draw(); }
+            if (type === 'rotate') { rotate(val); draw(); }
+        }
+
         // Send to Host
         push(ref(db, `rooms/${roomId}/inputs`), {
             action: type,
@@ -669,26 +679,36 @@ function handleInput(type, val) {
 }
 
 function updateControls(myRole) {
-    // Visual feedback on what is enabled
+    // Visual feedback
     const btnLeft = document.getElementById('btn-left');
     const btnRight = document.getElementById('btn-right');
+    const btnDown = document.getElementById('btn-down');
     const btnRotate = document.getElementById('btn-rotate');
 
+    const dim = '0.3';
+    const active = '1';
+
+    // Safety check just in case
+    if (!btnLeft) return;
+
     if (myRole === 'BOTH') {
-        btnRotate.style.opacity = '1';
-        btnLeft.style.opacity = '1';
-        btnRight.style.opacity = '1';
+        btnRotate.style.opacity = active;
+        btnLeft.style.opacity = active;
+        btnRight.style.opacity = active;
+        btnDown.style.opacity = active;
         return;
     }
 
     if (myRole === 'MOVE') {
-        btnRotate.style.opacity = '0.3';
-        btnLeft.style.opacity = '1';
-        btnRight.style.opacity = '1';
+        btnRotate.style.opacity = dim;
+        btnLeft.style.opacity = active;
+        btnRight.style.opacity = active;
+        btnDown.style.opacity = active;
     } else if (myRole === 'ROTATE') {
-        btnLeft.style.opacity = '0.3';
-        btnRight.style.opacity = '0.3';
-        btnRotate.style.opacity = '1';
+        btnLeft.style.opacity = dim;
+        btnRight.style.opacity = dim;
+        btnDown.style.opacity = dim;
+        btnRotate.style.opacity = active;
     }
 }
 
@@ -726,6 +746,12 @@ function rotateMatrix(matrix, dir) {
 
 function togglePause() {
     isPaused = !isPaused;
+    if (isPaused) {
+        showMenu("PAUSED");
+    } else {
+        document.getElementById('modal-game-menu').classList.remove('visible');
+        document.getElementById('modal-game-menu').classList.add('hidden');
+    }
 }
 
 function showToast(msg) {
