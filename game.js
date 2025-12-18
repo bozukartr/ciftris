@@ -73,35 +73,50 @@ const ctx = canvas.getContext('2d');
 // const nextCtx = nextCanvas.getContext('2d');
 
 // --- INIT ---
-function init() {
-    // Initialize Firebase
-    app = initializeApp(firebaseConfig);
-    db = getDatabase(app);
-    auth = getAuth(app);
+let isOffline = false;
 
-    // Auth Listener
-    onAuthStateChanged(auth, (user) => {
-        if (user) {
-            playerId = user.uid;
-            console.log("Logged in as:", playerId);
-            setupUI();
-        } else {
-            signInAnonymously(auth).catch(e => {
-                console.error("Auth Failed:", e);
-                // Fallback for UI testing
-                playerId = "offline_" + Math.random().toString(36).substr(2, 5);
-                console.warn("Using offline ID:", playerId);
-                showToast("Offline Mode (Auth Failed)");
+function init() {
+    try {
+        // Initialize Firebase
+        app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        auth = getAuth(app);
+
+        // Auth Listener
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                playerId = user.uid;
+                console.log("Logged in as:", playerId);
                 setupUI();
-            });
-        }
-    });
+            } else {
+                signInAnonymously(auth).catch(handleAuthError);
+            }
+        });
+    } catch (err) {
+        console.error("Firebase Init Error:", err);
+        handleAuthError(err);
+    }
 
     scaleCanvas();
     window.addEventListener('resize', scaleCanvas);
 
     // Initial draw
     draw();
+}
+
+function handleAuthError(e) {
+    console.error("Authentication/Connection Error:", e);
+    isOffline = true;
+    playerId = "offline_" + Math.random().toString(36).substr(2, 5);
+
+    showToast("Offline Mode (No Connection)");
+
+    // Set status in UI
+    const codeDisplay = document.getElementById('display-room-code');
+    if (codeDisplay) codeDisplay.innerText = "OFFLINE";
+
+    // In offline mode, allow playing solo or local testing
+    setupUI();
 }
 
 function createGrid() {
@@ -298,6 +313,25 @@ function gameOver() {
 // --- NETWORK ---
 
 function createRoom() {
+    if (isOffline) {
+        // Simulate waiting
+        roomId = "LOCAL";
+        isHost = true;
+        role = 'MOVE'; // Dfault to Move in offline test
+
+        document.getElementById('modal-connect').classList.remove('visible');
+        document.getElementById('modal-connect').classList.add('hidden');
+        document.getElementById('modal-waiting').classList.remove('hidden');
+        document.getElementById('modal-waiting').classList.add('visible');
+        document.getElementById('display-room-code').innerText = "LOCAL";
+
+        // Auto-start after 1 sec for testing
+        setTimeout(() => {
+            startGame("CPU");
+        }, 1000);
+        return;
+    }
+
     if (!playerId) return;
 
     // Create room ref
@@ -343,6 +377,11 @@ function createRoom() {
 }
 
 function joinRoom() {
+    if (isOffline) {
+        alert("Cannot join rooms in Offline Mode.");
+        return;
+    }
+
     if (!playerId) return;
 
     const codeInput = document.getElementById('inp-room-code').value.toUpperCase();
@@ -385,6 +424,22 @@ function joinRoom() {
 }
 
 function startGame(guestId) {
+    if (isOffline) {
+        // Local start
+        document.getElementById('modal-waiting').classList.remove('visible');
+        document.getElementById('modal-waiting').classList.add('hidden');
+
+        gameActive = true;
+        resetPiece();
+        lastTime = performance.now();
+        gameLoop();
+
+        // Give both controls in local for testing
+        role = 'BOTH';
+        showToast("Local / Offline Mode");
+        return;
+    }
+
     // Assign Roles Randomly
     const r = Math.random() > 0.5;
     const hostRole = r ? 'MOVE' : 'ROTATE';
@@ -541,15 +596,17 @@ function setupUI() {
 
 function handleInput(type, val) {
     // Check Role
-    if (role === 'MOVE' && (type === 'rotate')) return; // Can't rotate
-    if (role === 'ROTATE' && (type === 'move')) return; // Can't move
+    if (role !== 'BOTH') {
+        if (role === 'MOVE' && (type === 'rotate')) return; // Can't rotate
+        if (role === 'ROTATE' && (type === 'move')) return; // Can't move
+    }
 
     // Drop is shared? Or maybe restrict? Prompt said "opsiyonel: ortak".
     // Let's keep Drop shared for now, or maybe only Host?
     // User said "Player A: left/right", "Player B: rotate".
     // Usually Drop is shared.
 
-    if (isHost) {
+    if (isHost || role === 'BOTH') {
         // Apply directly
         if (type === 'move') move(val);
         if (type === 'rotate') rotate(val);
@@ -576,6 +633,13 @@ function updateControls(myRole) {
     const btnLeft = document.getElementById('btn-left');
     const btnRight = document.getElementById('btn-right');
     const btnRotate = document.getElementById('btn-rotate');
+
+    if (myRole === 'BOTH') {
+        btnRotate.style.opacity = '1';
+        btnLeft.style.opacity = '1';
+        btnRight.style.opacity = '1';
+        return;
+    }
 
     if (myRole === 'MOVE') {
         btnRotate.style.opacity = '0.3';
