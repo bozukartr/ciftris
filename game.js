@@ -267,9 +267,12 @@ function merge(arena, player) {
 function resetPiece() {
     // TODO: Random bag
     const typeId = (Math.random() * 7 | 0) + 1;
+    // Deep copy the shape to avoid mutating the global definition with rotations
+    const newShape = SHAPES[typeId].map(row => [...row]);
+
     piece = {
-        shape: SHAPES[typeId],
-        x: (COLS / 2 | 0) - (SHAPES[typeId][0].length / 2 | 0),
+        shape: newShape,
+        x: (COLS / 2 | 0) - (newShape[0].length / 2 | 0),
         y: 0
     };
     if (collide(grid, piece)) {
@@ -363,10 +366,13 @@ function createRoom() {
     // Listen for Guest Inputs
     onValue(ref(db, `rooms/${roomId}/inputs`), (snapshot) => {
         if (!isHost) return;
-        const input = snapshot.val();
-        if (input) {
-            processInput(input);
-            remove(ref(db, `rooms/${roomId}/inputs`)); // Consume
+        const inputs = snapshot.val();
+        if (inputs) {
+            // Process all inputs in the queue
+            Object.values(inputs).forEach(input => {
+                processInput(input);
+            });
+            remove(ref(db, `rooms/${roomId}/inputs`)); // Consume all
         }
     });
 
