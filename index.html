@@ -1,103 +1,95 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Çiftris - Co-op Tetris</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#060608">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Çiftris | Modern Multiplayer Tetris</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 
 <body>
-
-    <div id="app">
-        <!-- HEADER -->
-        <header class="hud-top">
-            <div class="hud-stat">
-                <span class="hud-label">Score</span>
-                <span id="score" class="hud-value">0</span>
-            </div>
-
-            <div class="next-piece">
-                <canvas id="nextCanvas" width="40" height="40"></canvas>
-            </div>
-
-            <div class="hud-stat" style="align-items: flex-end;">
-                <span class="hud-label">Level</span>
-                <span id="level" class="hud-value">1</span>
+    <div id="game-container">
+        <header>
+            <h1>Çiftris</h1>
+            <div id="room-info" class="hidden">
+                <span id="room-id">-</span>
             </div>
         </header>
 
-        <!-- GAME -->
-        <main class="game-container">
-            <canvas id="gameCanvas"></canvas>
+        <main>
+            <div id="hud">
+                <div class="stat-box">
+                    <label>SIRADAKİ</label>
+                    <div class="canvas-holder">
+                        <canvas id="next"></canvas>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <label>SKOR</label>
+                    <div id="score">0</div>
+                </div>
+                <div id="role-indicator" class="stat-box hidden">
+                    <label>ROLÜN</label>
+                    <div id="player-role">-</div>
+                </div>
+            </div>
+
+            <div id="game-wrapper">
+                <canvas id="tetris"></canvas>
+
+                <div id="overlay" class="overlay">
+                    <div id="menu" class="menu-content">
+                        <h2>Birlikte Oynayın</h2>
+                        <button id="create-btn" class="primary-btn">Oda Kur</button>
+                        <div class="divider">veya</div>
+                        <input type="text" id="join-input" placeholder="Oda Kodu">
+                        <button id="join-btn" class="secondary-btn">Odaya Katıl</button>
+                    </div>
+
+                    <div id="waiting" class="menu-content hidden">
+                        <h2>Oyuncu Bekleniyor...</h2>
+                        <p>Oda Kodu: <strong id="waiting-room-id"></strong></p>
+                        <div class="loader"></div>
+                    </div>
+
+                    <div id="game-over" class="menu-content hidden">
+                        <h2>Oyun Bitti</h2>
+                        <p>Skor: <span id="final-score">0</span></p>
+                        <button id="restart-btn" class="primary-btn">Tekrar Oyna</button>
+                    </div>
+                </div>
+            </div>
         </main>
 
-        <!-- CONTROLS -->
-        <footer class="controls-bottom">
-            <!-- Utility Row -->
-            <div class="row">
-                <button id="btn-drop" class="control-btn btn-small" data-action="drop">DROP</button>
+        <nav id="controls">
+            <div class="control-group movement-horizontal">
+                <button id="left-btn" class="ctrl-btn" aria-label="Sol">←</button>
+                <button id="right-btn" class="ctrl-btn" aria-label="Sağ">→</button>
             </div>
-
-            <!-- Main Row -->
-            <div class="row" style="height: 100px;">
-                <button id="btn-left" class="control-btn" data-action="left">◀</button>
-                <button id="btn-down" class="control-btn" data-action="down">▼</button>
-                <button id="btn-right" class="control-btn" data-action="right">▶</button>
+            <div class="control-group rotation">
+                <button id="rotate-btn" class="ctrl-btn" aria-label="Döndür">⟳</button>
             </div>
-
-            <!-- Rotate Row -->
-            <div class="row">
-                <button id="btn-rotate" class="control-btn" data-action="rotate"
-                    style="background: var(--bg-surface-hover);">ROTATE ⟳</button>
+            <div class="control-group movement-vertical">
+                <button id="down-btn" class="ctrl-btn" aria-label="Aşağı">↓</button>
             </div>
-        </footer>
-
-        <!-- FULL SCREEN MODAL OVERLAY -->
-        <div id="modal-overlay" class="modal-overlay visible">
-
-            <!-- START / CONNECT -->
-            <div id="modal-connect" class="modal-content">
-                <div>
-                    <h1>Çiftris</h1>
-                    <p>Co-op Multiplayer Tetris</p>
-                </div>
-
-                <button id="btn-create-room" class="btn-primary">New Game</button>
-
-                <div class="text-divider">OR JOIN GAME</div>
-
-                <input type="text" id="inp-room-code" placeholder="ROOM CODE" maxlength="4">
-                <button id="btn-join-room" class="btn-secondary">Join</button>
-            </div>
-
-            <!-- WAITING -->
-            <div id="modal-waiting" class="modal-content hidden">
-                <h1>Waiting</h1>
-                <p>Share this code with your partner</p>
-                <div id="display-room-code" class="room-display">----</div>
-                <button class="btn-secondary" onclick="location.reload()">Cancel</button>
-            </div>
-
-            <!-- PAUSE / GAME OVER -->
-            <div id="modal-game-menu" class="modal-content hidden">
-                <h1 id="menu-title">Game Over</h1>
-                <p>Score: <span id="menu-score">0</span></p>
-
-                <button id="btn-restart" class="btn-primary">Restart</button>
-            </div>
-        </div>
-
-        <div id="toast" class="toast">Message</div>
+        </nav>
     </div>
 
-    <!-- Scripts -->
-    <!-- Firebase SDKs (using UMD for simple HTML inclusion without bundler if preferred, or Modules) -->
-    <!-- We will use type="module" in game.js which imports from CDN -->
-    <script type="module" src="game.js"></script>
+    <!-- Firebase Scripts (using CDN for simplicity in this environment) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script src="game.js"></script>
+    <script src="multiplayer.js"></script>
+    <script src="main.js"></script>
 </body>
 
 </html>
