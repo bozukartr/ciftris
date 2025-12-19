@@ -67,8 +67,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Bind Score
     game.onScoreChange = (score) => {
-        scoreElement.innerText = score;
-        AudioEngine.clear(); // Play sound on score
+        // UI Update
+        document.getElementById('score').innerText = score;
+        AudioEngine.clear();
+
+        // Host Sync
+        if (mp.isHost && mp.roomRef) {
+            mp.roomRef.child('score').set(score);
+        }
     };
 
     // Disable browser behaviors
