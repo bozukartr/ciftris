@@ -65,6 +65,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gameOver() { this.play(100, 'sawtooth', 0.8, 0.2); }
     };
 
+    // Bind Score
+    game.onScoreChange = (score) => {
+        scoreElement.innerText = score;
+        AudioEngine.clear(); // Play sound on score
+    };
+
     // Disable browser behaviors
     document.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -97,7 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     gameWrapper.addEventListener('touchstart', startFastDrop, { passive: false });
+    gameWrapper.addEventListener('touchmove', (e) => {
+        if (e.cancelable) e.preventDefault(); // Prevent scrolling while holding
+    }, { passive: false });
     gameWrapper.addEventListener('touchend', stopFastDrop);
+    gameWrapper.addEventListener('touchcancel', stopFastDrop);
     gameWrapper.addEventListener('mousedown', startFastDrop);
     gameWrapper.addEventListener('mouseup', stopFastDrop);
     gameWrapper.addEventListener('mouseleave', stopFastDrop);
