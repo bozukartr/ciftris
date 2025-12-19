@@ -12,73 +12,85 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 
 <body>
     <div id="game-container">
-        <header>
-            <h1>Çiftris</h1>
-            <div id="room-info" class="hidden">
-                <span id="room-id">-</span>
-            </div>
-        </header>
-
+        <!-- Main Game Area -->
         <main>
             <div id="hud">
-                <div class="stat-box">
+                <div class="stat-card">
+                    <label>ODA</label>
+                    <div id="room-id" class="stat-value">-</div>
+                </div>
+                <div class="stat-card">
                     <label>SIRADAKİ</label>
-                    <div class="canvas-holder">
+                    <div class="next-container">
                         <canvas id="next"></canvas>
                     </div>
                 </div>
-                <div class="stat-box">
+                <div class="stat-card">
                     <label>SKOR</label>
-                    <div id="score">0</div>
+                    <div id="score" class="stat-value">0</div>
                 </div>
-                <div id="role-indicator" class="stat-box hidden">
-                    <label>ROLÜN</label>
-                    <div id="player-role">-</div>
-                </div>
+            </div>
+
+            <div id="role-bar" class="stat-card wide hidden">
+                <label>ROLÜN</label>
+                <div id="player-role" class="stat-value">-</div>
             </div>
 
             <div id="game-wrapper">
                 <canvas id="tetris"></canvas>
 
+                <!-- Overlay Messages -->
                 <div id="overlay" class="overlay">
-                    <div id="menu" class="menu-content">
-                        <h2>Birlikte Oynayın</h2>
-                        <button id="create-btn" class="primary-btn">Oda Kur</button>
+                    <div id="menu" class="modal">
+                        <h2>Çiftris</h2>
+                        <button id="create-btn" class="btn-pill">Oda Kur</button>
                         <div class="divider">veya</div>
-                        <input type="text" id="join-input" placeholder="Oda Kodu">
-                        <button id="join-btn" class="secondary-btn">Odaya Katıl</button>
+                        <input type="text" id="join-input" class="input-pill" placeholder="Oda Kodu">
+                        <button id="join-btn" class="btn-pill btn-ghost">Odaya Katıl</button>
                     </div>
 
-                    <div id="waiting" class="menu-content hidden">
-                        <h2>Oyuncu Bekleniyor...</h2>
-                        <p>Oda Kodu: <strong id="waiting-room-id"></strong></p>
+                    <div id="waiting" class="modal hidden">
+                        <h2>Bekleniyor</h2>
+                        <p style="text-align: center; color: var(--text-dim); margin-bottom: 20px;">Arkadaşına kodu
+                            gönder:</p>
+                        <div id="waiting-room-id"
+                            style="font-size: 2.5rem; font-weight: 700; text-align: center; margin-bottom: 24px; letter-spacing: 0.1em; color: white;">
+                        </div>
                         <div class="loader"></div>
+                        <button id="cancel-waiting-btn" class="btn-pill btn-ghost" style="margin-top: 20px;">İptal
+                            Et</button>
                     </div>
 
-                    <div id="game-over" class="menu-content hidden">
-                        <h2>Oyun Bitti</h2>
-                        <p>Skor: <span id="final-score">0</span></p>
-                        <button id="restart-btn" class="primary-btn">Tekrar Oyna</button>
+                    <div id="game-over" class="modal hidden">
+                        <h2>Bitti</h2>
+                        <p style="text-align: center; color: var(--text-dim); margin-bottom: 20px;">Skorun: <span
+                                id="final-score" style="color: white; font-weight: 700;">0</span></p>
+                        <button id="restart-btn" class="btn-pill">Yeniden Başla</button>
                     </div>
                 </div>
             </div>
         </main>
 
-        <nav id="controls">
-            <div class="control-group movement-horizontal">
-                <button id="left-btn" class="ctrl-btn" aria-label="Sol">←</button>
-                <button id="right-btn" class="ctrl-btn" aria-label="Sağ">→</button>
-            </div>
-            <div class="control-group rotation">
-                <button id="rotate-btn" class="ctrl-btn" aria-label="Döndür">⟳</button>
-            </div>
-            <div class="control-group movement-vertical">
-                <button id="down-btn" class="ctrl-btn" aria-label="Aşağı">↓</button>
+        <nav id="control-dock">
+            <div class="dock-row">
+                <div class="pad-group">
+                    <button id="left-btn" class="joy-btn" aria-label="Sol">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button id="right-btn" class="joy-btn" aria-label="Sağ">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+                <button id="rotate-btn" class="joy-btn primary" aria-label="Döndür">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
             </div>
         </nav>
     </div>
@@ -90,6 +102,13 @@
     <script src="game.js"></script>
     <script src="multiplayer.js"></script>
     <script src="main.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch(err => console.log('Service Worker Failed', err));
+        }
+    </script>
 </body>
 
 </html>

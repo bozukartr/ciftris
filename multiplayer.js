@@ -30,10 +30,18 @@ class Multiplayer {
     }
 
     setupGameListeners() {
-        // When game state changes locally, sync to Firebase (if we are the authority for that change)
         this.game.onStateChange = () => {
             if (this.roomRef) {
                 this.syncState();
+            }
+        };
+
+        this.game.onPieceSpawn = (count) => {
+            if (this.roomRef) {
+                this.updateRoleBasedOnCount(count);
+                if (this.isHost) {
+                    this.roomRef.child('pieceCount').set(count);
+                }
             }
         };
 
@@ -50,18 +58,46 @@ class Multiplayer {
         };
     }
 
+    updateRoleBasedOnCount(count) {
+        // Simple logic: every piece, swap roles
+        // We use the initial hostRole choice to determine the sequence
+        const roles = ['mover', 'rotator'];
+        const hostBaseIdx = this.initialHostRole === 'mover' ? 0 : 1;
+        const currentHostRoleIdx = (hostBaseIdx + count - 1) % 2;
+        const currentHostRole = roles[currentHostRoleIdx];
+
+        if (this.isHost) {
+            this.playerRole = currentHostRole;
+        } else {
+            this.playerRole = (currentHostRole === 'mover') ? 'rotator' : 'mover';
+        }
+
+        this.updateRoleUI();
+    }
+
+    updateRoleUI() {
+        const roleDisplay = document.getElementById('player-role');
+        const roleBar = document.getElementById('role-bar');
+        if (roleDisplay && roleBar) {
+            roleBar.classList.remove('hidden');
+            roleDisplay.innerText = this.playerRole === 'mover' ? 'HAREKET ETTİRİCİ' : 'DÖNDÜRÜCÜ';
+            roleDisplay.className = 'stat-value ' + this.playerRole;
+        }
+    }
+
     async createRoom() {
-        this.roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        // Generate 5-digit numeric room code
+        this.roomId = Math.floor(10000 + Math.random() * 90000).toString();
         this.roomRef = db.ref('rooms/' + this.roomId);
 
-        // Randomly assign roles
         const roles = ['mover', 'rotator'];
-        const hostRole = roles[Math.floor(Math.random() * 2)];
-        this.playerRole = hostRole;
+        this.initialHostRole = roles[Math.floor(Math.random() * 2)];
+        this.playerRole = this.initialHostRole;
         this.isHost = true;
 
         await this.roomRef.set({
-            hostRole: hostRole,
+            hostRole: this.initialHostRole,
+            pieceCount: 1,
             players: { host: true },
             state: this.getInitialGameState(),
             score: 0,
@@ -71,6 +107,15 @@ class Multiplayer {
 
         this.listenToRoom();
         return this.roomId;
+    }
+
+    async cancelRoom() {
+        if (this.roomRef && this.isHost) {
+            await this.roomRef.remove();
+            this.roomRef = null;
+            this.roomId = null;
+            this.isHost = false;
+        }
     }
 
     async joinRoom(id) {
@@ -84,7 +129,11 @@ class Multiplayer {
         this.roomId = id;
         this.roomRef = db.ref('rooms/' + id);
         this.isHost = false;
-        this.playerRole = data.hostRole === 'mover' ? 'rotator' : 'mover';
+        this.initialHostRole = data.hostRole;
+
+        // Use current pieceCount to determine current role
+        const count = data.pieceCount || 1;
+        this.updateRoleBasedOnCount(count);
 
         await this.roomRef.child('players/guest').set(true);
 
@@ -92,16 +141,8 @@ class Multiplayer {
         return id;
     }
 
-    getInitialGameState() {
-        return {
-            grid: this.game.grid,
-            piece: this.game.piece,
-            nextPiece: this.game.nextPiece
-        };
-    }
-
+    // ... (listenToRoom, etc.)
     listenToRoom() {
-        // Listen for Role assignment and Player joining
         this.roomRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) return;
@@ -122,8 +163,12 @@ class Multiplayer {
                 document.getElementById('score').innerText = data.score;
             }
 
-            // Sync game state (if we are not the host, we take the state from Firebase)
-            // Or if we are the host but an action happened from the guest
+            // Sync pieceCount for role swapping on guest side
+            if (!this.isHost && data.pieceCount !== undefined && data.pieceCount !== this.game.pieceCount) {
+                this.game.pieceCount = data.pieceCount;
+                this.updateRoleBasedOnCount(data.pieceCount);
+            }
+
             if (data.state && !this.isHost) {
                 this.game.grid = data.state.grid;
                 this.game.piece = data.state.piece;
@@ -133,12 +178,10 @@ class Multiplayer {
             }
         });
 
-        // Listen for actions specifically to reduce full state sync frequency
         this.roomRef.child('lastAction').on('value', (snapshot) => {
             const action = snapshot.val();
             if (!action || action.playerId === this.playerRole) return;
 
-            // Handle remote actions
             if (action.type === 'move') {
                 this.game.move(action.dx, action.dy);
             } else if (action.type === 'rotate') {
@@ -149,8 +192,6 @@ class Multiplayer {
 
     sendAction(type, dx, dy) {
         if (!this.roomRef) return;
-
-        // Mover can move, Rotator can rotate
         if (this.playerRole === 'mover' && type === 'move') {
             this.game.move(dx, dy);
             this.roomRef.child('lastAction').set({
@@ -166,16 +207,20 @@ class Multiplayer {
         }
     }
 
+    getInitialGameState() {
+        return {
+            grid: this.game.grid,
+            piece: this.game.piece,
+            nextPiece: this.game.nextPiece
+        };
+    }
+
     syncState() {
-        if (!this.roomRef) return;
-        // Only host syncs the full state to keep it authoritative
-        // Guest only sends actions
-        if (this.isHost) {
-            this.roomRef.child('state').set({
-                grid: this.game.grid,
-                piece: this.game.piece,
-                nextPiece: this.game.nextPiece
-            });
-        }
+        if (!this.roomRef || !this.isHost) return;
+        this.roomRef.child('state').set({
+            grid: this.game.grid,
+            piece: this.game.piece,
+            nextPiece: this.game.nextPiece
+        });
     }
 }

@@ -35,20 +35,46 @@ class Game {
         this.piece = null;
         this.nextPiece = this.generatePiece();
 
+        // Polish
+        this.particles = [];
+        this.level = 1;
+        this.linesClearedTotal = 0;
+
         this.blockSize = 0;
         this.resize();
 
         this.onScoreChange = null;
         this.onGameOver = null;
+        this.onLock = null;
         this.onStateChange = null; // For multiplayer sync
+        this.onPieceSpawn = null;
+        this.pieceCount = 0;
     }
 
     resize() {
         const parent = this.canvas.parentElement;
-        this.blockSize = parent.clientWidth / COLS;
-        this.canvas.width = parent.clientWidth;
-        this.canvas.height = parent.clientHeight;
+        if (!parent) return;
+
+        // Calculate block size to fit perfectly in both dimensions
+        this.blockSize = Math.min(
+            parent.clientWidth / COLS,
+            parent.clientHeight / ROWS
+        );
+
+        this.canvas.width = this.blockSize * COLS;
+        this.canvas.height = this.blockSize * ROWS;
+
+        // Sync next canvas size
+        const nextParent = this.nextCanvas.parentElement;
+        if (nextParent) {
+            this.nextCanvas.width = nextParent.clientWidth * window.devicePixelRatio;
+            this.nextCanvas.height = nextParent.clientHeight * window.devicePixelRatio;
+            this.nextCanvas.style.width = `${nextParent.clientWidth}px`;
+            this.nextCanvas.style.height = `${nextParent.clientHeight}px`;
+        }
+
         this.draw();
+        this.drawNext();
     }
 
     generatePiece() {
@@ -73,6 +99,8 @@ class Game {
         }
 
         this.drawNext();
+        this.pieceCount++;
+        if (this.onPieceSpawn) this.onPieceSpawn(this.pieceCount);
         if (this.onStateChange) this.onStateChange();
     }
 
@@ -137,13 +165,16 @@ class Game {
             });
         });
         this.clearLines();
+        if (this.onLock) this.onLock();
         this.spawnPiece();
     }
 
     clearLines() {
         let linesCleared = 0;
+        let rowsToClear = [];
         for (let r = ROWS - 1; r >= 0; r--) {
             if (this.grid[r].every(cell => cell !== 0)) {
+                rowsToClear.push(r);
                 this.grid.splice(r, 1);
                 this.grid.unshift(Array(COLS).fill(0));
                 linesCleared++;
@@ -152,12 +183,21 @@ class Game {
         }
         if (linesCleared > 0) {
             this.score += [0, 100, 300, 500, 800][linesCleared];
+            this.linesClearedTotal += linesCleared;
+            this.level = Math.floor(this.linesClearedTotal / 10) + 1;
+
+            // Trigger effects
+            rowsToClear.forEach(y => this.spawnParticles(y));
+            this.triggerScreenShake();
+
             if (this.onScoreChange) this.onScoreChange(this.score);
         }
     }
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.drawGrid();
 
         // Draw grid
         this.grid.forEach((row, r) => {
@@ -167,6 +207,11 @@ class Game {
                 }
             });
         });
+
+        // Draw ghost piece
+        if (this.piece) {
+            this.drawGhost();
+        }
 
         // Draw active piece
         if (this.piece) {
@@ -178,114 +223,208 @@ class Game {
                 });
             });
         }
+
+        // Draw particles
+        this.drawParticles(this.ctx);
+    }
+
+    drawGhost() {
+        let ghostY = this.piece.y;
+        while (!this.checkCollision(this.piece.x, ghostY + 1, this.piece.shape)) {
+            ghostY++;
+        }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.2; // Faint ghost
+        this.piece.shape.forEach((row, r) => {
+            row.forEach((value, c) => {
+                if (value) {
+                    const x = this.piece.x + c;
+                    const y = ghostY + r;
+                    const padding = 1;
+                    const size = this.blockSize - padding * 2;
+                    const rx = x * this.blockSize + padding;
+                    const ry = y * this.blockSize + padding;
+
+                    this.ctx.strokeStyle = this.piece.color;
+                    this.ctx.lineWidth = 1;
+                    this.ctx.strokeRect(rx, ry, size, size);
+                    this.ctx.fillStyle = this.piece.color;
+                    this.ctx.fillRect(rx, ry, size, size);
+                }
+            });
+        });
+        this.ctx.restore();
+    }
+
+    drawGrid() {
+        const ctx = this.ctx;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)'; // Extremely faint
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+
+        // Vertical lines
+        for (let x = 0; x <= COLS; x++) {
+            const px = x * this.blockSize;
+            ctx.moveTo(px, 0);
+            ctx.lineTo(px, this.canvas.height);
+        }
+
+        // Horizontal lines
+        for (let y = 0; y <= ROWS; y++) {
+            const py = y * this.blockSize;
+            ctx.moveTo(0, py);
+            ctx.lineTo(this.canvas.width, py);
+        }
+
+        ctx.stroke();
     }
 
     drawNext() {
         if (!this.nextPiece) return;
-        this.nextCtx.clearRect(0, 0, this.nextCanvas.width, this.nextCanvas.height);
+        const ctx = this.nextCtx;
+        ctx.clearRect(0, 0, this.nextCanvas.width, this.nextCanvas.height);
 
         const shape = this.nextPiece.shape;
         const rows = shape.length;
         const cols = shape[0].length;
 
-        // Calculate block size to fit in nextCanvas
-        const padding = 10;
+        // Maximize size within the canvas
+        const padding = 2; // Minimal padding
         const availableHeight = this.nextCanvas.height - padding * 2;
         const availableWidth = this.nextCanvas.width - padding * 2;
-        const size = Math.min(availableWidth / cols, availableHeight / rows, this.blockSize * 0.8);
+        const size = Math.min(availableWidth / cols, availableHeight / rows);
 
         const offsetX = (this.nextCanvas.width - cols * size) / 2;
         const offsetY = (this.nextCanvas.height - rows * size) / 2;
+
+        const color = this.nextPiece.color;
 
         shape.forEach((row, r) => {
             row.forEach((value, c) => {
                 if (value) {
                     const rx = offsetX + c * size;
                     const ry = offsetY + r * size;
-                    const radius = size * 0.2;
-                    const innerSize = size - 2;
+                    const innerSize = size - 1; // 1px gap for geometric look
 
-                    this.nextCtx.save();
-                    this.nextCtx.beginPath();
-                    this.nextCtx.roundRect(rx + 1, ry + 1, innerSize, innerSize, radius);
-                    this.nextCtx.fillStyle = this.nextPiece.color;
-                    this.nextCtx.fill();
+                    ctx.fillStyle = color;
+                    ctx.fillRect(rx, ry, innerSize, innerSize);
 
-                    const gradient = this.nextCtx.createLinearGradient(rx, ry, rx + size, ry + size);
-                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
-                    this.nextCtx.fillStyle = gradient;
-                    this.nextCtx.fill();
-
-                    this.nextCtx.restore();
+                    // Geometric border
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(rx, ry, innerSize, innerSize);
                 }
             });
         });
     }
 
     drawBlock(ctx, x, y, color) {
-        const padding = 2;
+        const padding = 1; // Distinct separation
         const size = this.blockSize - padding * 2;
         const rx = x * this.blockSize + padding;
         const ry = y * this.blockSize + padding;
-        const radius = 6;
 
-        ctx.save();
+        // Flat fill with slight lightness boost for "matte plastic" look
+        ctx.fillStyle = color;
+        ctx.fillRect(rx, ry, size, size);
 
-        // Rounded rectangle path
-        ctx.beginPath();
-        ctx.moveTo(rx + radius, ry);
-        ctx.lineTo(rx + size - radius, ry);
-        ctx.quadraticCurveTo(rx + size, ry, rx + size, ry + radius);
-        ctx.lineTo(rx + size, ry + size - radius);
-        ctx.quadraticCurveTo(rx + size, ry + size, rx + size - radius, ry + size);
-        ctx.lineTo(rx + radius, ry + size);
-        ctx.quadraticCurveTo(rx, ry + size, rx, ry + size - radius);
-        ctx.lineTo(rx, ry + radius);
-        ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
-        ctx.closePath();
-
-        // Gradient
-        const gradient = ctx.createLinearGradient(rx, ry, rx + size, ry + size);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(1, this.shadeColor(color, -20));
-
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        // Inner highlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        // Crisp border for geometric clearer definition
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.strokeRect(rx, ry, size, size);
 
-        ctx.restore();
+        // Optional: Very subtle inner highlight for shape definition without 3Dness
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(rx, ry, size, size);
     }
 
     shadeColor(color, percent) {
-        let R = parseInt(color.substring(1, 3), 16);
-        let G = parseInt(color.substring(3, 5), 16);
-        let B = parseInt(color.substring(5, 7), 16);
-
-        R = parseInt(R * (100 + percent) / 100);
-        G = parseInt(G * (100 + percent) / 100);
-        B = parseInt(B * (100 + percent) / 100);
-
-        R = (R < 255) ? R : 255;
-        G = (G < 255) ? G : 255;
-        B = (B < 255) ? B : 255;
-
-        const RR = ((R.toString(16).length === 1) ? "0" + R.toString(16) : R.toString(16));
-        const GG = ((G.toString(16).length === 1) ? "0" + G.toString(16) : G.toString(16));
-        const BB = ((B.toString(16).length === 1) ? "0" + B.toString(16) : B.toString(16));
-
-        return "#" + RR + GG + BB;
+        let f = parseInt(color.slice(1), 16),
+            t = percent < 0 ? 0 : 255,
+            p = percent < 0 ? percent * -1 / 100 : percent / 100,
+            R = f >> 16,
+            G = f >> 8 & 0x00FF,
+            B = f & 0x0000FF;
+        return "#" + (0x1000000 + (Math.round((t - R) * p) + R) * 0x10000 + (Math.round((t - G) * p) + G) * 0x100 + (Math.round((t - B) * p) + B)).toString(16).slice(1);
     }
 
     reset() {
         this.grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
         this.score = 0;
+        this.linesClearedTotal = 0;
+        this.level = 1;
         this.gameOver = false;
+        this.particles = [];
         this.spawnPiece();
         this.draw();
+    }
+
+    // Polish Methods
+    spawnParticles(rowY) {
+        // Spawn confetti across the cleared row
+        for (let c = 0; c < COLS; c++) {
+            // Spawn 5-8 particles per block
+            const count = 5 + Math.floor(Math.random() * 4);
+            const color = this.grid[rowY] && this.grid[rowY][c] ? this.grid[rowY][c] : COLORS[Object.keys(COLORS)[Math.floor(Math.random() * 7)]];
+
+            for (let i = 0; i < count; i++) {
+                this.particles.push({
+                    x: c * this.blockSize + this.blockSize / 2,
+                    y: rowY * this.blockSize + this.blockSize / 2,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+    }
+
+    updateParticles(dt) {
+        // dt is in ms, we want fractions of seconds roughly, or just tune values
+        // Assuming dt is around 16ms
+        const timeScale = dt / 16.0;
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            let p = this.particles[i];
+            p.x += p.vx * timeScale;
+            p.y += p.vy * timeScale;
+            p.life -= 0.02 * timeScale;
+            p.vy += 0.5 * timeScale; // Gravity
+
+            if (p.life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+
+    drawParticles(ctx) {
+        ctx.save();
+        this.particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+        });
+        ctx.restore();
+    }
+
+    triggerScreenShake() {
+        const wrapper = document.getElementById('game-wrapper');
+        if (wrapper) {
+            wrapper.classList.remove('shake');
+            void wrapper.offsetWidth; // Trigger reflow
+            wrapper.classList.add('shake');
+        }
+
+        // Haptic feedback
+        if (navigator.vibrate) {
+            navigator.vibrate(100);
+        }
+    }
+
+    getLevel() {
+        return this.level;
     }
 }
